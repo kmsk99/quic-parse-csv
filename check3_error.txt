@@ -1,0 +1,5 @@
+Error processing C:\quic-parse-csv\merged\merged_10.csv: could not convert string to float: 'SCAN3_HTTP3.csv'
+Error processing C:\quic-parse-csv\merged\merged_15.csv: could not convert string to float: 'traffic_record_scan_2.csv'
+Error processing C:\quic-parse-csv\merged\merged_20.csv: could not convert string to float: 'recording_49.csv'
+Error processing C:\quic-parse-csv\merged\merged_5.csv: could not convert string to float: 'traffic_record_QUIC_CONNECT_2.csv'
+Error processing C:\quic-parse-csv\merged\merged_full.csv: could not convert string to float: 'traffic_record_QUIC_CONNECT_5.csv'
