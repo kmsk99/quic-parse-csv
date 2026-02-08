@@ -36,7 +36,7 @@ env/
 *.swo
 
 # Output files
-output/
+# output/
 
 # OS
 .DS_Store
