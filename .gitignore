@@ -36,10 +36,11 @@ env/
 *.swo
 
 # Output files
-*.csv
 output/
-results/
 
 # OS
 .DS_Store
 Thumbs.db
+/data
+
+.env*
