@@ -312,6 +312,29 @@ quic-parse-csv/
 PACKET_WINDOWS = [5, 10, 15, 20]  # 분석할 패킷 윈도우 크기
 ```
 
+## CSV 파일 병합
+
+분석이 완료된 후, 모든 CSV 파일을 하나로 합치고 label을 추가할 수 있습니다:
+
+```bash
+# CSV 파일 병합 스크립트 실행
+uv run python merge_csv.py
+```
+
+이 스크립트는:
+- `output/5/`, `output/10/`, `output/15/`, `output/20/`, `output/full/` 폴더의 모든 CSV 파일을 읽습니다
+- 파일명에 따라 자동으로 label을 추가합니다:
+  - `quic_connect` 포함 → `label: quic`
+  - `scan` 포함 → `label: scan`
+  - `http` 포함 → `label: http`
+  - 그 외 → `label: normal`
+- 각 폴더별로 하나의 파일로 합쳐서 `merged/` 폴더에 저장합니다:
+  - `merged/merged_5.csv`
+  - `merged/merged_10.csv`
+  - `merged/merged_15.csv`
+  - `merged/merged_20.csv`
+  - `merged/merged_full.csv`
+
 ## 연구 참고
 
 이 도구는 다음 논문의 특징 추출 방법을 기반으로 합니다:

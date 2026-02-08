@@ -37,6 +37,7 @@ env/
 
 # Output files
 # output/
+merged/
 
 # OS
 .DS_Store
