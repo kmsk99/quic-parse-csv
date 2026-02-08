@@ -1,19 +1,41 @@
 # QUIC pcap 파일 분석 도구
 
-QUIC pcap 파일에서 각 flow의 전체 통계와 첫 5, 10, 15, 20개 패킷에 대한 통계를 추출하는 고성능 병렬 처리 Python 도구입니다.
+QUIC pcap 파일에서 각 flow의 **64개 특징**을 추출하는 Python 도구입니다. DDoS 공격 탐지 연구를 위한 논문 기반 특징 추출.
 
 ## 기능
 
 - **재귀적 폴더 탐색**: 모든 depth의 폴더에서 첫 번째 pcap 파일 자동 탐색
-- QUIC flow 자동 감지 및 분리
-- **8개 워커를 사용한 멀티스레드 병렬 처리**
-- **작은 청크 단위 처리**: 각 워커는 최대 10개 flow씩 처리 (1분 이내 완료 목표)
-- **실시간 진행 상황 표시 (tqdm)**
-- 각 flow에 대한 상세 통계:
-  - 전체 flow 통계 (패킷 수, 총 바이트, 평균/최소/최대 패킷 크기, 지속 시간)
-  - 첫 5, 10, 15, 20개 패킷에 대한 동일한 통계
-- **파일별 즉시 CSV 저장** (메모리 효율적)
-- **종류별 폴더 구조** (`output/full`, `output/5`, `output/10`, `output/15`, `output/20`)
+- **QUIC flow 자동 감지 및 분리**
+- **64개 특징 추출** (논문 기반):
+  
+  ### 1. 패킷 및 바이트 수 통계 (6개)
+  - 전체, incoming, outgoing 패킷 수
+  - 전체, incoming, outgoing 바이트 수
+  
+  ### 2. 패킷 크기 통계 (18개)
+  - 전체, incoming, outgoing 각각:
+    - mean, min, max, std, variance, coefficient of variation
+  
+  ### 3. IAT (Inter-Arrival Time) 통계 (15개)
+  - 전체, incoming, outgoing 각각:
+    - mean, min, max, std, variance
+  
+  ### 4. QUIC 프로토콜 특징 (13개)
+  - Spin Bit: count, ratio, no_spin_bit_ratio
+  - 패킷 유형별 개수: Initial, Handshake, 0-RTT, 1-RTT, Retry
+  - 패킷 유형별 비율: Initial, Handshake, 0-RTT, 1-RTT, Retry
+  
+  ### 5. 엔트로피 및 복잡도 (2개)
+  - 패킷 방향 엔트로피
+  - 패킷 크기 엔트로피
+  
+  ### 6. Flow 메타데이터 (10개)
+  - Duration, client/server IP/Port, flow_id, file name, window size
+  
+- **윈도우 분석**: 전체 + 첫 5, 10, 15, 20개 패킷에 대한 통계
+- **tshark 직접 사용**: pyshark보다 10-50배 빠른 속도
+- **즉시 저장**: 각 파일 분석 완료 즉시 CSV 저장
+- **종류별 폴더 구조**: `output/full`, `output/5`, `output/10`, `output/15`, `output/20`
 
 ## 설치
 
@@ -47,38 +69,58 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python main.py
 ```
 
-## 출력 구조
-
-프로그램은 다음과 같은 폴더 구조로 CSV 파일을 생성합니다:
-
-```
-output/
-├── full/          # 전체 flow 통계
-│   ├── recording_1.csv
-│   ├── normal_traffic_recording_11.csv
-│   └── ...
-├── 5/             # 첫 5개 패킷 통계
-│   ├── recording_1.csv
-│   └── ...
-├── 10/            # 첫 10개 패킷 통계
-├── 15/            # 첫 15개 패킷 통계
-└── 20/            # 첫 20개 패킷 통계
-```
-
-### CSV 파일 형식
+## CSV 파일 형식
 
 **전체 통계 (`output/full/`)**:
 - `file`: 원본 pcap 파일명
-- `flow_id`: flow 식별자 (src_ip:port->dst_ip:port)
-- `total_packets`: flow의 총 패킷 수
-- `packet_count`, `total_bytes`, `avg_packet_size`, `min_packet_size`, `max_packet_size`, `duration`
+- `flow_id`: flow 식별자
+- `client_ip`, `client_port`: 클라이언트 정보
+- `server_ip`, `server_port`: 서버 정보
+- 64개 특징 (패킷 수, 바이트 수, 크기 통계, IAT, QUIC 특징, 엔트로피 등)
 
 **윈도우 통계 (`output/5/`, `10/`, `15/`, `20/`)**:
-- `file`: 원본 pcap 파일명
-- `flow_id`: flow 식별자
-- `window_size`: 윈도우 크기 (5, 10, 15, 20)
-- `total_packets_in_flow`: flow 전체의 패킷 수
-- `packet_count`, `total_bytes`, `avg_packet_size`, `min_packet_size`, `max_packet_size`, `duration`
+- 위 필드 + `window_size`, `total_packets_in_flow`
+- 첫 N개 패킷에 대한 64개 특징
+
+## 특징 목록 (64개)
+
+### 패킷 및 바이트 수 (6개)
+```
+total_packets, outgoing_packets, incoming_packets
+total_bytes, outgoing_bytes, incoming_bytes
+```
+
+### 패킷 크기 통계 (18개)
+```
+packet_size_mean, packet_size_min, packet_size_max, packet_size_std, packet_size_var, packet_size_cv
+packet_size_out_mean, packet_size_out_min, packet_size_out_max, packet_size_out_std, packet_size_out_var, packet_size_out_cv
+packet_size_in_mean, packet_size_in_min, packet_size_in_max, packet_size_in_std, packet_size_in_var, packet_size_in_cv
+```
+
+### IAT 통계 (15개)
+```
+iat_mean, iat_min, iat_max, iat_std, iat_var
+iat_out_mean, iat_out_min, iat_out_max, iat_out_std, iat_out_var
+iat_in_mean, iat_in_min, iat_in_max, iat_in_std, iat_in_var
+```
+
+### QUIC 프로토콜 특징 (13개)
+```
+spin_bit_count, spin_bit_ratio, no_spin_bit_ratio
+initial_packets, handshake_packets, zerortt_packets, onertt_packets, retry_packets
+initial_ratio, handshake_ratio, zerortt_ratio, onertt_ratio, retry_ratio
+```
+
+### 엔트로피 (2개)
+```
+entropy_direction, entropy_packet_size
+```
+
+### Flow 메타데이터 (10개)
+```
+duration, client_ip, client_port, server_ip, server_port
+flow_id, file, window_size, total_packets_in_flow
+```
 
 ## 요구사항
 
@@ -103,21 +145,13 @@ sudo yum install wireshark    # CentOS/RHEL
 - **tshark 직접 사용**: pyshark 대신 tshark를 직접 호출하여 10-50배 속도 향상
   - pyshark: Python 래퍼로 인한 오버헤드
   - tshark 직접 사용: C 네이티브 코드로 최대 속도
-  - JSON 출력으로 필요한 필드만 추출
+  - 텍스트 필드 출력으로 안정적인 파싱
   - 2.3GB 파일: 90분 → 5-10분
 - **경량 패킷 정보 저장**: 패킷 객체 전체가 아닌 필요한 정보만 딕셔너리로 저장
-  - 메모리 사용량 90% 이상 감소 (3GB 파일 기준)
-  - 패킷 객체의 무거운 메타데이터 제거
-  - 처리 속도 10-100배 향상
-- **파이프라인 병렬 처리**: 패킷 읽기와 flow 분류를 분리하여 동시에 처리
-  - 패킷 읽기 스레드: 파일에서 패킷을 읽어 큐에 넣기
-  - Flow 분류 워커들: 큐에서 패킷을 가져와서 flow로 분류 (8개 워커)
-  - 읽기와 처리가 동시에 일어나 전체 처리 시간 단축
-- **병렬 처리**: 각 파일의 flow들을 8개 워커로 병렬 처리
-- **청크 분할**: Flow를 10개씩 묶어서 워커에게 할당 (워커당 1분 이내 처리 목표)
+  - 메모리 사용량 90% 이상 감소
+  - QUIC 프로토콜 특정 필드 포함 (spin_bit, packet_type, header_form)
 - **즉시 저장**: 각 파일 분석 완료 즉시 CSV 저장 (메모리 효율)
-- **스레드 안전**: 파일 쓰기 시 락(Lock)을 사용하여 동시성 보장
-- **진행 표시**: tqdm을 사용한 실시간 진행 상황 및 속도 표시
+- **진행 표시**: tqdm을 사용한 실시간 진행 상황 표시
 - **재귀적 탐색**: 모든 depth의 폴더에서 pcap 파일 자동 발견
 
 ### 성능 개선 효과
@@ -151,14 +185,12 @@ quic-parse-csv/
 `main.py` 상단에서 다음 설정을 변경할 수 있습니다:
 
 ```python
-NUM_WORKERS = 8  # 워커 수 (CPU 코어 수에 따라 조정)
-MAX_FLOWS_PER_CHUNK = 10  # 각 워커가 처리할 최대 flow 개수
-PACKET_QUEUE_SIZE = 1000  # 패킷 큐 크기 (파이프라인 버퍼)
 PACKET_WINDOWS = [5, 10, 15, 20]  # 분석할 패킷 윈도우 크기
 ```
 
-### 성능 튜닝 팁
+## 연구 참고
 
-- **NUM_WORKERS**: CPU 코어 수에 맞게 조정 (일반적으로 코어 수와 동일하거나 2배)
-- **PACKET_QUEUE_SIZE**: 메모리가 충분하면 더 크게 설정 (2000-5000)하여 읽기 속도 향상
-- **MAX_FLOWS_PER_CHUNK**: 워커당 처리 시간이 너무 길면 더 작게 (5-8), 너무 짧으면 더 크게 (15-20)
+이 도구는 다음 논문의 특징 추출 방법을 기반으로 합니다:
+- DDoS 공격 탐지를 위한 QUIC 트래픽 분석
+- 64개 특징: Volume, Packet Size, IAT, QUIC-Specific, Entropy
+- 주요 특징: 패킷 방향 엔트로피, Spin Bit 비율, IAT, 패킷 개수

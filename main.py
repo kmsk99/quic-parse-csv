@@ -15,6 +15,8 @@ from collections import defaultdict
 from tqdm import tqdm
 import time
 import subprocess
+import numpy as np
+from scipy import stats as scipy_stats
 
 # .env 파일 로드
 load_dotenv()
@@ -104,6 +106,7 @@ def extract_quic_flows_tshark(pcap_file: Path) -> Dict[str, List[Dict[str, Any]]
     """
     tshark를 사용하여 pcap 파일에서 QUIC flow를 추출합니다.
     텍스트 필드 출력 모드 사용 (JSON보다 빠르고 안정적)
+    QUIC 프로토콜 특정 필드 포함
     
     Args:
         pcap_file: 분석할 pcap 파일 경로
@@ -119,16 +122,17 @@ def extract_quic_flows_tshark(pcap_file: Path) -> Dict[str, List[Dict[str, Any]]
     print(f"  📖 파일 읽기: {pcap_file.name} ({file_size_str})")
     
     try:
-        # tshark 명령어 - 텍스트 필드 출력 모드 (더 빠르고 안정적)
+        # tshark 명령어 - QUIC 프로토콜 특정 필드 추가
         # -T fields: 필드 텍스트 출력
-        # -E separator=,: CSV 형식
+        # -E separator=|: 파이프로 구분 (쉼표는 필드 내부에 있을 수 있음)
         # -E quote=d: 큰따옴표로 감싸기
+        # 주의: spin_bit, packet_type 등은 선택적 필드 (없을 수 있음)
         cmd = [
             'tshark',
             '-r', str(pcap_file),
             '-Y', 'quic || udp.port == 443',
             '-T', 'fields',
-            '-E', 'separator=,',
+            '-E', 'separator=|',
             '-E', 'quote=d',
             '-e', 'ip.src',
             '-e', 'ip.dst',
@@ -137,7 +141,12 @@ def extract_quic_flows_tshark(pcap_file: Path) -> Dict[str, List[Dict[str, Any]]
             '-e', 'udp.srcport',
             '-e', 'udp.dstport',
             '-e', 'frame.len',
-            '-e', 'frame.time_epoch'
+            '-e', 'frame.time_epoch',
+            '-e', 'quic.long.packet_type',  # Initial, Handshake, 0-RTT, Retry (Long header)
+            '-e', 'quic.packet_length',  # QUIC packet length
+            '-e', 'quic.version',  # QUIC version
+            '-e', 'quic.dcid',  # Destination Connection ID
+            '-e', 'quic.scid'   # Source Connection ID
         ]
         
         # tshark 실행
@@ -156,8 +165,8 @@ def extract_quic_flows_tshark(pcap_file: Path) -> Dict[str, List[Dict[str, Any]]
                 if not line.strip():
                     continue
                 
-                # CSV 파싱 (따옴표 제거)
-                fields = [f.strip('"').strip() for f in line.split(',')]
+                # 파이프로 구분된 필드 파싱 (따옴표 제거)
+                fields = [f.strip('"').strip() for f in line.split('|')]
                 
                 if len(fields) < 8:
                     pbar.update(1)
@@ -173,6 +182,13 @@ def extract_quic_flows_tshark(pcap_file: Path) -> Dict[str, List[Dict[str, Any]]
                 frame_len = fields[6]
                 time_epoch = fields[7]
                 
+                # QUIC 프로토콜 특정 필드 (인덱스 8부터)
+                packet_type = fields[8] if len(fields) > 8 else ''  # Initial, Handshake, etc
+                quic_length = fields[9] if len(fields) > 9 else ''
+                quic_version = fields[10] if len(fields) > 10 else ''
+                dcid = fields[11] if len(fields) > 11 else ''
+                scid = fields[12] if len(fields) > 12 else ''
+                
                 # IP 주소 결정 (IPv4 우선, 없으면 IPv6)
                 src_ip = ip_src if ip_src else ipv6_src
                 dst_ip = ip_dst if ip_dst else ipv6_dst
@@ -182,6 +198,11 @@ def extract_quic_flows_tshark(pcap_file: Path) -> Dict[str, List[Dict[str, Any]]
                     pbar.update(1)
                     continue
                 
+                # Spin bit 추출 (Short header 패킷에만 존재, 여기서는 패킷 타입으로 추정)
+                # Long header (Initial, Handshake, 0-RTT) = spin bit 없음
+                # Short header (1-RTT) = spin bit 있음
+                has_long_header = bool(packet_type)  # packet_type이 있으면 Long header
+                
                 # 패킷 정보 생성
                 try:
                     packet_info = {
@@ -190,7 +211,14 @@ def extract_quic_flows_tshark(pcap_file: Path) -> Dict[str, List[Dict[str, Any]]
                         'src_port': src_port,
                         'dst_port': dst_port,
                         'size': int(frame_len) if frame_len else 0,
-                        'timestamp': float(time_epoch) if time_epoch else 0.0
+                        'timestamp': float(time_epoch) if time_epoch else 0.0,
+                        'packet_type': packet_type.lower() if packet_type else '',  # initial, handshake, 0-rtt
+                        'is_long_header': has_long_header,
+                        'is_short_header': not has_long_header,
+                        'quic_length': int(quic_length) if quic_length else 0,
+                        'quic_version': quic_version,
+                        'dcid': dcid,
+                        'scid': scid
                     }
                 except (ValueError, TypeError):
                     pbar.update(1)
@@ -201,12 +229,45 @@ def extract_quic_flows_tshark(pcap_file: Path) -> Dict[str, List[Dict[str, Any]]
                 flow_id_2 = f"{dst_ip}:{dst_port}->{src_ip}:{src_port}"
                 flow_id = min(flow_id_1, flow_id_2)
                 
-                # Flow에 패킷 추가
-                flows[flow_id].append(packet_info)
+                # 첫 번째 패킷의 방향을 기준으로 저장
+                if flow_id not in flows:
+                    # 첫 패킷이므로 서버/클라이언트 방향 설정
+                    flows[flow_id] = {
+                        'packets': [],
+                        'server_ip': None,
+                        'server_port': None,
+                        'client_ip': None,
+                        'client_port': None
+                    }
+                
+                # 패킷에 방향 정보 추가
+                packet_info['direction'] = None  # 나중에 설정
+                flows[flow_id]['packets'].append(packet_info)
                 
                 pbar.update(1)
         
         print(f"  ✓ {len(flows)}개 flow, {len(lines)}개 패킷 발견")
+        
+        # 각 flow의 방향 정보 설정 (첫 패킷 기준)
+        for flow_id, flow_data in flows.items():
+            packets = flow_data['packets']
+            if not packets:
+                continue
+            
+            # 첫 패킷의 src를 클라이언트로 가정
+            first_packet = packets[0]
+            flow_data['client_ip'] = first_packet['src_ip']
+            flow_data['client_port'] = first_packet['src_port']
+            flow_data['server_ip'] = first_packet['dst_ip']
+            flow_data['server_port'] = first_packet['dst_port']
+            
+            # 모든 패킷에 방향 정보 추가
+            for packet in packets:
+                if (packet['src_ip'] == flow_data['client_ip'] and 
+                    packet['src_port'] == flow_data['client_port']):
+                    packet['direction'] = 'outgoing'  # 클라이언트 → 서버
+                else:
+                    packet['direction'] = 'incoming'  # 서버 → 클라이언트
         
     except subprocess.CalledProcessError as e:
         print(f"  ❌ tshark 실행 오류: {e.stderr}")
@@ -218,16 +279,44 @@ def extract_quic_flows_tshark(pcap_file: Path) -> Dict[str, List[Dict[str, Any]]
     return flows
 
 
-def calculate_packet_statistics(packets: List[Dict[str, Any]], num_packets: int = None) -> Dict[str, Any]:
+def calculate_entropy(values: List[Any]) -> float:
     """
-    패킷들의 통계를 계산합니다.
+    엔트로피를 계산합니다.
+    
+    Args:
+        values: 값 리스트
+        
+    Returns:
+        엔트로피 값
+    """
+    if not values:
+        return 0.0
+    
+    # 값의 빈도 계산
+    from collections import Counter
+    counts = Counter(values)
+    total = len(values)
+    
+    # 엔트로피 계산
+    entropy = 0.0
+    for count in counts.values():
+        probability = count / total
+        if probability > 0:
+            entropy -= probability * np.log2(probability)
+    
+    return entropy
+
+
+def calculate_comprehensive_statistics(packets: List[Dict[str, Any]], num_packets: int = None) -> Dict[str, Any]:
+    """
+    64개 특징을 포함한 포괄적인 통계를 계산합니다.
     
     Args:
         packets: 패킷 정보 딕셔너리 리스트
         num_packets: 분석할 패킷 개수 (None이면 전체)
         
     Returns:
-        통계 딕셔너리
+        64개 특징을 포함한 통계 딕셔너리
     """
     if num_packets:
         packets = packets[:num_packets]
@@ -235,47 +324,138 @@ def calculate_packet_statistics(packets: List[Dict[str, Any]], num_packets: int 
     if not packets:
         return {}
     
-    stats = {
-        'packet_count': len(packets),
-        'total_bytes': 0,
-        'avg_packet_size': 0,
-        'min_packet_size': float('inf'),
-        'max_packet_size': 0,
-        'duration': 0,
-    }
+    stats = {}
     
-    packet_sizes = []
-    timestamps = []
+    # 방향별로 패킷 분리
+    all_packets = packets
+    outgoing_packets = [p for p in packets if p.get('direction') == 'outgoing']
+    incoming_packets = [p for p in packets if p.get('direction') == 'incoming']
     
-    for packet_info in packets:
-        try:
-            # 패킷 크기
-            size = packet_info.get('size', 0)
-            if size > 0:
-                packet_sizes.append(size)
-                stats['total_bytes'] += size
-                stats['min_packet_size'] = min(stats['min_packet_size'], size)
-                stats['max_packet_size'] = max(stats['max_packet_size'], size)
-            
-            # 타임스탬프
-            timestamp = packet_info.get('timestamp', 0)
-            if timestamp > 0:
-                timestamps.append(timestamp)
-                
-        except Exception:
-            continue
+    # === 1. 패킷 및 바이트 수 통계 ===
+    stats['total_packets'] = len(all_packets)
+    stats['outgoing_packets'] = len(outgoing_packets)
+    stats['incoming_packets'] = len(incoming_packets)
     
-    # 평균 계산
-    if packet_sizes:
-        stats['avg_packet_size'] = sum(packet_sizes) / len(packet_sizes)
+    stats['total_bytes'] = sum(p.get('size', 0) for p in all_packets)
+    stats['outgoing_bytes'] = sum(p.get('size', 0) for p in outgoing_packets)
+    stats['incoming_bytes'] = sum(p.get('size', 0) for p in incoming_packets)
     
-    # Duration 계산
+    # === 2. 패킷 크기 통계 (전체, incoming, outgoing) ===
+    def calc_size_stats(pkts, prefix):
+        sizes = [p.get('size', 0) for p in pkts if p.get('size', 0) > 0]
+        if not sizes:
+            stats[f'{prefix}_mean'] = 0
+            stats[f'{prefix}_min'] = 0
+            stats[f'{prefix}_max'] = 0
+            stats[f'{prefix}_std'] = 0
+            stats[f'{prefix}_var'] = 0
+            stats[f'{prefix}_cv'] = 0  # Coefficient of Variation
+            return
+        
+        stats[f'{prefix}_mean'] = np.mean(sizes)
+        stats[f'{prefix}_min'] = np.min(sizes)
+        stats[f'{prefix}_max'] = np.max(sizes)
+        stats[f'{prefix}_std'] = np.std(sizes)
+        stats[f'{prefix}_var'] = np.var(sizes)
+        # Coefficient of Variation (표준편차 / 평균)
+        stats[f'{prefix}_cv'] = np.std(sizes) / np.mean(sizes) if np.mean(sizes) > 0 else 0
+    
+    calc_size_stats(all_packets, 'packet_size')
+    calc_size_stats(outgoing_packets, 'packet_size_out')
+    calc_size_stats(incoming_packets, 'packet_size_in')
+    
+    # === 3. IAT (Inter-Arrival Time) 통계 ===
+    def calc_iat_stats(pkts, prefix):
+        timestamps = sorted([p.get('timestamp', 0) for p in pkts if p.get('timestamp', 0) > 0])
+        if len(timestamps) < 2:
+            stats[f'{prefix}_mean'] = 0
+            stats[f'{prefix}_min'] = 0
+            stats[f'{prefix}_max'] = 0
+            stats[f'{prefix}_std'] = 0
+            stats[f'{prefix}_var'] = 0
+            return
+        
+        iats = [timestamps[i+1] - timestamps[i] for i in range(len(timestamps)-1)]
+        stats[f'{prefix}_mean'] = np.mean(iats)
+        stats[f'{prefix}_min'] = np.min(iats)
+        stats[f'{prefix}_max'] = np.max(iats)
+        stats[f'{prefix}_std'] = np.std(iats)
+        stats[f'{prefix}_var'] = np.var(iats)
+    
+    calc_iat_stats(all_packets, 'iat')
+    calc_iat_stats(outgoing_packets, 'iat_out')
+    calc_iat_stats(incoming_packets, 'iat_in')
+    
+    # === 4. QUIC 프로토콜 특정 특징 ===
+    
+    # Spin Bit 관련 - Short header 패킷에서만 의미있음
+    # 현재 데이터에서는 Long header만 있을 수 있으므로 0으로 처리
+    short_header_packets = [p for p in all_packets if p.get('is_short_header', False)]
+    long_header_packets = [p for p in all_packets if p.get('is_long_header', False)]
+    
+    stats['short_header_count'] = len(short_header_packets)
+    stats['long_header_count'] = len(long_header_packets)
+    stats['short_header_ratio'] = len(short_header_packets) / len(all_packets) if all_packets else 0
+    stats['long_header_ratio'] = len(long_header_packets) / len(all_packets) if all_packets else 0
+    
+    # Spin bit는 Short header에서만 의미있으므로, 여기서는 placeholder
+    stats['spin_bit_count'] = 0  # Short header 패킷 분석 필요
+    stats['spin_bit_ratio'] = 0.0
+    stats['no_spin_bit_ratio'] = 1.0
+    
+    # QUIC 패킷 유형별 통계 (Long header 패킷들)
+    for pkt in all_packets:
+        ptype = pkt.get('packet_type', '').lower()
+        
+        if 'initial' in ptype or ptype == '0':
+            stats['initial_packets'] = stats.get('initial_packets', 0) + 1
+        elif 'handshake' in ptype or ptype == '2':
+            stats['handshake_packets'] = stats.get('handshake_packets', 0) + 1
+        elif '0-rtt' in ptype or 'zerortt' in ptype or ptype == '1':
+            stats['zerortt_packets'] = stats.get('zerortt_packets', 0) + 1
+        elif 'retry' in ptype or ptype == '3':
+            stats['retry_packets'] = stats.get('retry_packets', 0) + 1
+        elif pkt.get('is_short_header', False):
+            # Short header = 1-RTT 데이터 패킷
+            stats['onertt_packets'] = stats.get('onertt_packets', 0) + 1
+    
+    # 기본값 설정
+    for key in ['initial_packets', 'handshake_packets', 'zerortt_packets', 
+                'onertt_packets', 'retry_packets']:
+        if key not in stats:
+            stats[key] = 0
+    
+    # 비율 계산
+    total = len(all_packets)
+    if total > 0:
+        stats['initial_ratio'] = stats['initial_packets'] / total
+        stats['handshake_ratio'] = stats['handshake_packets'] / total
+        stats['zerortt_ratio'] = stats['zerortt_packets'] / total
+        stats['onertt_ratio'] = stats['onertt_packets'] / total
+        stats['retry_ratio'] = stats['retry_packets'] / total
+    else:
+        stats['initial_ratio'] = 0
+        stats['handshake_ratio'] = 0
+        stats['zerortt_ratio'] = 0
+        stats['onertt_ratio'] = 0
+        stats['retry_ratio'] = 0
+    
+    # === 5. 엔트로피 특징 ===
+    
+    # 패킷 방향 엔트로피
+    directions = [p.get('direction', 'unknown') for p in all_packets]
+    stats['entropy_direction'] = calculate_entropy(directions)
+    
+    # 패킷 크기 엔트로피 (10바이트 단위로 binning)
+    sizes_binned = [p.get('size', 0) // 10 for p in all_packets]
+    stats['entropy_packet_size'] = calculate_entropy(sizes_binned)
+    
+    # === 6. Flow Duration ===
+    timestamps = [p.get('timestamp', 0) for p in all_packets if p.get('timestamp', 0) > 0]
     if len(timestamps) >= 2:
-        stats['duration'] = timestamps[-1] - timestamps[0]
-    
-    # 무한대 값 처리
-    if stats['min_packet_size'] == float('inf'):
-        stats['min_packet_size'] = 0
+        stats['duration'] = max(timestamps) - min(timestamps)
+    else:
+        stats['duration'] = 0
     
     return stats
 
@@ -283,6 +463,7 @@ def calculate_packet_statistics(packets: List[Dict[str, Any]], num_packets: int 
 def analyze_pcap_file(pcap_file: Path) -> Dict[str, int]:
     """
     pcap 파일을 분석하고 각 종류별로 CSV를 저장합니다.
+    64개 특징 추출.
     
     Args:
         pcap_file: 분석할 pcap 파일 경로
@@ -294,28 +475,32 @@ def analyze_pcap_file(pcap_file: Path) -> Dict[str, int]:
     
     try:
         # QUIC flow 추출
-        flows = extract_quic_flows_tshark(pcap_file)
+        flows_data = extract_quic_flows_tshark(pcap_file)
         
-        if not flows:
+        if not flows_data:
             print(f"  ⚠️  flow 없음")
             return {'full': 0, 5: 0, 10: 0, 15: 0, 20: 0}
         
         filename_base = pcap_file.stem
         
         # 전체 flow 통계 계산
-        print(f"  ⚙️  전체 통계 계산 중...")
+        print(f"  ⚙️  전체 통계 계산 중 (64개 특징)...")
         full_results = []
-        for flow_id, packets in tqdm(flows.items(), desc="  전체 flow", leave=False):
+        for flow_id, flow_data in tqdm(flows_data.items(), desc="  전체 flow", leave=False):
+            packets = flow_data['packets']
+            
             flow_result = {
                 'file': pcap_file.name,
                 'flow_id': flow_id,
-                'total_packets': len(packets),
+                'client_ip': flow_data.get('client_ip', ''),
+                'client_port': flow_data.get('client_port', ''),
+                'server_ip': flow_data.get('server_ip', ''),
+                'server_port': flow_data.get('server_port', ''),
             }
             
-            # 전체 flow 통계
-            full_stats = calculate_packet_statistics(packets)
-            for key, value in full_stats.items():
-                flow_result[key] = value
+            # 64개 특징 계산
+            full_stats = calculate_comprehensive_statistics(packets)
+            flow_result.update(full_stats)
             
             full_results.append(flow_result)
         
@@ -324,6 +509,7 @@ def analyze_pcap_file(pcap_file: Path) -> Dict[str, int]:
             df = pd.DataFrame(full_results)
             output_path = OUTPUT_FOLDERS['full'] / f"{filename_base}.csv"
             df.to_csv(output_path, index=False)
+            print(f"    ✓ {output_path}")
         
         # 각 윈도우 크기별로 통계 계산
         window_counts = {5: 0, 10: 0, 15: 0, 20: 0}
@@ -332,7 +518,9 @@ def analyze_pcap_file(pcap_file: Path) -> Dict[str, int]:
             print(f"  ⚙️  첫 {window}개 패킷 통계 계산 중...")
             window_results = []
             
-            for flow_id, packets in tqdm(flows.items(), desc=f"  첫 {window}개", leave=False):
+            for flow_id, flow_data in tqdm(flows_data.items(), desc=f"  첫 {window}개", leave=False):
+                packets = flow_data['packets']
+                
                 if len(packets) < window:
                     continue
                 
@@ -341,12 +529,15 @@ def analyze_pcap_file(pcap_file: Path) -> Dict[str, int]:
                     'flow_id': flow_id,
                     'window_size': window,
                     'total_packets_in_flow': len(packets),
+                    'client_ip': flow_data.get('client_ip', ''),
+                    'client_port': flow_data.get('client_port', ''),
+                    'server_ip': flow_data.get('server_ip', ''),
+                    'server_port': flow_data.get('server_port', ''),
                 }
                 
-                # 첫 N개 패킷 통계
-                window_stats = calculate_packet_statistics(packets, window)
-                for key, value in window_stats.items():
-                    flow_result[key] = value
+                # 첫 N개 패킷에 대한 64개 특징 계산
+                window_stats = calculate_comprehensive_statistics(packets, window)
+                flow_result.update(window_stats)
                 
                 window_results.append(flow_result)
                 window_counts[window] += 1
@@ -356,23 +547,34 @@ def analyze_pcap_file(pcap_file: Path) -> Dict[str, int]:
                 df = pd.DataFrame(window_results)
                 output_path = OUTPUT_FOLDERS[window] / f"{filename_base}.csv"
                 df.to_csv(output_path, index=False)
+                print(f"    ✓ {output_path}")
         
         elapsed = time.time() - start_time
-        print(f"  ✓ 완료: {len(flows)} flows, {elapsed:.2f}초")
+        print(f"  ✓ 완료: {len(flows_data)} flows, {elapsed:.2f}초")
         
         return {'full': len(full_results), **window_counts}
         
     except Exception as e:
         print(f"  ❌ 오류: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {'full': 0, 5: 0, 10: 0, 15: 0, 20: 0}
 
 
 def main():
     """메인 함수"""
     print("=" * 80)
-    print("QUIC pcap 파일 분석 시작 (tshark 직접 사용)")
+    print("QUIC pcap 파일 분석 시작 (64개 특징 추출)")
     print(f"PCAP 루트 디렉토리: {PCAP_ROOT_DIR}")
     print(f"출력 디렉토리: {OUTPUT_DIR}")
+    print("=" * 80)
+    print("\n추출 특징:")
+    print("  1. 패킷/바이트 수 통계 (전체, incoming, outgoing)")
+    print("  2. 패킷 크기 통계 (mean, min, max, std, var, cv)")
+    print("  3. IAT 통계 (Inter-Arrival Time)")
+    print("  4. QUIC 프로토콜 특징 (Spin Bit, 패킷 유형)")
+    print("  5. 엔트로피 (방향, 크기)")
+    print("  총 약 64개 특징\n")
     print("=" * 80)
     
     # 출력 디렉토리 구조 생성
