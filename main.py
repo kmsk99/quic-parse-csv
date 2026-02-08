@@ -7,6 +7,7 @@ tshark를 직접 사용하여 빠른 처리.
 
 import os
 import sys
+import platform
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
@@ -25,6 +26,42 @@ load_dotenv()
 PCAP_ROOT_DIR = Path(os.getenv("PCAP_ROOT_DIR", "/Volumes/Lieutenant/quic"))
 OUTPUT_DIR = Path("output")
 PACKET_WINDOWS = [5, 10, 15, 20]  # 분석할 패킷 개수
+
+# OS별 tshark 경로 설정
+def get_tshark_command():
+    """OS에 맞는 tshark 명령어를 반환합니다."""
+    system = platform.system()
+    
+    if system == "Windows":
+        # Windows: Wireshark 기본 설치 경로 확인
+        possible_paths = [
+            r"C:\Program Files\Wireshark\tshark.exe",
+            r"C:\Program Files (x86)\Wireshark\tshark.exe",
+            "tshark.exe"  # PATH에 있는 경우
+        ]
+        
+        for path in possible_paths:
+            if path == "tshark.exe":
+                # PATH에서 확인
+                try:
+                    subprocess.run([path, "-v"], capture_output=True, check=True)
+                    return path
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    continue
+            elif os.path.exists(path):
+                return path
+        
+        # 찾지 못한 경우
+        raise FileNotFoundError(
+            "tshark를 찾을 수 없습니다.\n"
+            "Wireshark를 설치하세요: https://www.wireshark.org/download.html\n"
+            "설치 시 'TShark' 옵션을 반드시 포함하세요."
+        )
+    else:
+        # macOS, Linux: 기본적으로 PATH에 있음
+        return "tshark"
+
+TSHARK_CMD = get_tshark_command()
 
 # 출력 폴더 구조
 OUTPUT_FOLDERS = {
@@ -128,7 +165,7 @@ def extract_quic_flows_tshark(pcap_file: Path) -> Dict[str, List[Dict[str, Any]]
         # -E quote=d: 큰따옴표로 감싸기
         # 주의: spin_bit, packet_type 등은 선택적 필드 (없을 수 있음)
         cmd = [
-            'tshark',
+            TSHARK_CMD,  # OS별 tshark 명령어
             '-r', str(pcap_file),
             '-Y', 'quic || udp.port == 443',
             '-T', 'fields',
@@ -565,6 +602,8 @@ def main():
     """메인 함수"""
     print("=" * 80)
     print("QUIC pcap 파일 분석 시작 (64개 특징 추출)")
+    print(f"OS: {platform.system()}")
+    print(f"tshark: {TSHARK_CMD}")
     print(f"PCAP 루트 디렉토리: {PCAP_ROOT_DIR}")
     print(f"출력 디렉토리: {OUTPUT_DIR}")
     print("=" * 80)

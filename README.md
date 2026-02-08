@@ -2,6 +2,8 @@
 
 QUIC pcap 파일에서 각 flow의 **64개 특징**을 추출하는 Python 도구입니다. DDoS 공격 탐지 연구를 위한 논문 기반 특징 추출.
 
+**크로스 플랫폼 지원**: Windows, macOS, Linux에서 모두 실행 가능합니다.
+
 ## 기능
 
 - **재귀적 폴더 탐색**: 모든 depth의 폴더에서 첫 번째 pcap 파일 자동 탐색
@@ -39,13 +41,56 @@ QUIC pcap 파일에서 각 flow의 **64개 특징**을 추출하는 Python 도�
 
 ## 설치
 
-uv를 사용하여 의존성을 설치합니다:
+### 1. uv 설치
+
+#### macOS/Linux
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+#### Windows (PowerShell)
+```powershell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+### 2. Wireshark (tshark) 설치
+
+#### macOS
+```bash
+brew install wireshark
+```
+
+#### Linux (Ubuntu/Debian)
+```bash
+sudo apt-get update
+sudo apt-get install tshark
+```
+
+#### Windows
+1. [Wireshark 다운로드 페이지](https://www.wireshark.org/download.html) 방문
+2. Windows Installer 다운로드 및 실행
+3. **중요**: 설치 중 "TShark" 컴포넌트를 반드시 선택하세요
+   - "Choose Components" 단계에서 체크박스 확인
+4. 설치 완료 후 시스템 재시작 권장
+
+**설치 확인**:
+```bash
+# macOS/Linux
+tshark -v
+
+# Windows (PowerShell 또는 CMD)
+"C:\Program Files\Wireshark\tshark.exe" -v
+# 또는 PATH에 추가된 경우
+tshark -v
+```
+
+### 3. 프로젝트 의존성 설치
 
 ```bash
-# uv 설치 (아직 설치하지 않은 경우)
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# 프로젝트 폴더로 이동
+cd quic-parse-csv
 
-# 프로젝트 의존성 설치
+# 의존성 설치
 uv sync
 ```
 
@@ -53,11 +98,24 @@ uv sync
 
 `.env` 파일에서 pcap 파일 경로를 설정합니다:
 
+#### macOS/Linux
 ```bash
 PCAP_ROOT_DIR=/Volumes/Lieutenant/quic
 ```
 
+#### Windows
+```bash
+# 절대 경로 사용 (백슬래시 또는 슬래시 모두 가능)
+PCAP_ROOT_DIR=C:/Users/YourName/Documents/quic
+# 또는
+PCAP_ROOT_DIR=C:\Users\YourName\Documents\quic
+```
+
+**참고**: Windows에서는 Python이 자동으로 경로 구분자를 처리합니다.
+
 ## 사용법
+
+### macOS/Linux
 
 ```bash
 # uv로 실행
@@ -65,7 +123,31 @@ uv run python main.py
 
 # 또는 가상환경 활성화 후 실행
 uv sync
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+source .venv/bin/activate
+python main.py
+```
+
+### Windows (PowerShell)
+
+```powershell
+# uv로 실행
+uv run python main.py
+
+# 또는 가상환경 활성화 후 실행
+uv sync
+.venv\Scripts\Activate.ps1
+python main.py
+```
+
+### Windows (CMD)
+
+```cmd
+# uv로 실행
+uv run python main.py
+
+# 또는 가상환경 활성화 후 실행
+uv sync
+.venv\Scripts\activate.bat
 python main.py
 ```
 
@@ -126,18 +208,28 @@ flow_id, file, window_size, total_packets_in_flow
 
 - Python 3.10 이상
 - Wireshark/tshark (pyshark가 내부적으로 사용)
+- uv (패키지 관리자)
 
-### macOS에서 tshark 설치
+### tshark 설치 확인
 
+설치 후 다음 명령어로 확인:
+
+#### macOS/Linux
 ```bash
-brew install wireshark
+tshark -v
 ```
 
-### Linux에서 tshark 설치
+#### Windows
+```cmd
+tshark -v
+# 또는 전체 경로
+"C:\Program Files\Wireshark\tshark.exe" -v
+```
 
-```bash
-sudo apt-get install tshark  # Ubuntu/Debian
-sudo yum install wireshark    # CentOS/RHEL
+출력 예시:
+```
+TShark (Wireshark) 4.0.x
+...
 ```
 
 ## 성능 최적화
@@ -163,11 +255,43 @@ sudo yum install wireshark    # CentOS/RHEL
 - **메모리 절감**: 90% 이상 감소
 - **읽기 속도**: 10-40배 향상
 
+## 문제 해결
+
+### Windows: tshark를 찾을 수 없음
+
+**증상**: `FileNotFoundError: tshark를 찾을 수 없습니다`
+
+**해결책**:
+1. Wireshark가 설치되어 있는지 확인
+2. 설치 시 "TShark" 옵션을 선택했는지 확인
+3. 수동으로 PATH에 추가:
+   ```powershell
+   # 시스템 환경 변수에 추가
+   setx PATH "%PATH%;C:\Program Files\Wireshark"
+   ```
+4. PowerShell/CMD 재시작
+
+### Windows: 권한 오류
+
+**증상**: pcap 파일 읽기 권한 오류
+
+**해결책**:
+- PowerShell/CMD를 관리자 권한으로 실행
+- 또는 pcap 파일을 사용자 폴더로 복사
+
+### 모든 OS: 메모리 부족
+
+**증상**: 큰 파일 처리 시 메모리 부족
+
+**해결책**:
+- 파일을 더 작은 단위로 분할
+- 또는 `PACKET_WINDOWS`를 줄이기 (예: `[5, 10]`)
+
 ## 프로젝트 구조
 
 ```
 quic-parse-csv/
-├── main.py              # 메인 분석 스크립트 (병렬 처리)
+├── main.py              # 메인 분석 스크립트
 ├── pyproject.toml       # uv 의존성 설정
 ├── .env                 # 환경 변수 (pcap 경로)
 ├── .gitignore          # Git 무시 파일
