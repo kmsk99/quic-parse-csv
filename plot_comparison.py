@@ -3,13 +3,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Configuration
-RESULTS_DIR = 'prediction'
-OUTPUT_DIR = 'prediction/comparison'
-DATASETS = ['5', '10', '15', '20', 'full']
+# Configuration Import
+import config
+
+RESULTS_DIR = config.MODEL_DIR
+OUTPUT_DIR = config.MODEL_DIR / 'comparison'
+DATASETS = config.DATASETS
 
 # Ensure output directory exists
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
 
 def load_data():
     all_results = []
