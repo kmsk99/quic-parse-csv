@@ -1,0 +1,19 @@
+[project]
+name = "quic-parse-csv"
+version = "0.1.0"
+description = "QUIC pcap 파일 분석 및 통계 생성 도구"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pyshark>=0.6",
+    "python-dotenv>=1.0.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
