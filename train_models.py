@@ -168,38 +168,51 @@ def process_dataset(dataset_name):
             # SHAP Analysis
             print(f"  Calculating SHAP for {name}...")
             try:
-                # Use TreeExplainer for tree models, Linear for others, Kernel as fallback
+                # Use TreeExplainer for tree models, Linear for others
+                # Use modern explainer(X) API which returns an Explanation object
                 if name in ['GBC', 'DT', 'RF', 'LGBM', 'XGB']:
                     explainer = shap.TreeExplainer(model)
-                    shap_values = explainer.shap_values(X_test_scaled)
                 elif name in ['SVM', 'LR']:
-                    explainer = shap.LinearExplainer(model, X_train_scaled)
-                    shap_values = explainer.shap_values(X_test_scaled)
+                    # For Linear models, we need a background dataset (X_train)
+                    # We use a summary (kmeans) to keep it fast, or just a sample
+                    masker = shap.maskers.Independent(data=X_train_scaled) if len(X_train_scaled) < 100 else shap.maskers.Independent(data=shap.kmeans(X_train_scaled, 10))
+                    explainer = shap.LinearExplainer(model, masker=masker)
                 else:
-                    # KernelExplainer is slow, maybe skip or sample heavily
-                    # For now, stick to Tree/Linear which cover the best performers
-                    print(f"  Skipping SHAP for {name} (KernelExplainer too slow/complex for full run)")
-                    shap_values = None
+                    print(f"  Skipping SHAP for {name} (Not fully supported for this plot type)")
+                    explainer = None
 
-                if shap_values is not None:
-                    # Handle binary classification case where shap_values might be a list
-                    if isinstance(shap_values, list):
-                        # For binary, usually take the positive class (index 1)
-                        if len(shap_values) == 2:
-                            vals = shap_values[1]
-                        else:
-                            # Multiclass - might be complex to plot summary for all classes in one go simpler
-                            # Just plot for the first class or aggregate? 
-                            # summary_plot handles lists for multiclass
-                            vals = shap_values
-                    else:
-                        vals = shap_values
-
+                if explainer is not None:
+                    # Calculate SHAP values (returns Explanation object)
+                    # Limit to a sample if test set is huge to speed up
+                    X_shap = X_test_scaled[:500] if len(X_test_scaled) > 500 else X_test_scaled
+                    shap_values_obj = explainer(X_shap)
+                    
+                    # Handle shape (samples, features, classes) for multiclass/binary
+                    # shap_values_obj.values is numpy array
+                    # If binary (classes=2), usually shape is (N, M, 2) or (N, M) depending on model
+                    # We want to plot for the prediction of the positive class (1)
+                    
+                    vals_to_plot = shap_values_obj
+                    if len(shap_values_obj.shape) == 3:
+                        # (Samples, Features, Classes) -> Select Class 1
+                        vals_to_plot = shap_values_obj[:, :, 1]
+                    
                     plt.figure()
-                    shap.summary_plot(vals, X_test_scaled, feature_names=X_test.columns, show=False)
+                    # 'dot' is the default but let's be explicit, this is the "summary plot" user wants
+                    shap.summary_plot(vals_to_plot, X_shap, feature_names=X_test.columns, show=False, plot_type='violin') # or dot
+                    plt.title(f'{name} SHAP Summary')
                     plt.tight_layout()
                     plt.savefig(os.path.join(model_dir, f'shap_summary_{name}.png'))
                     plt.close()
+                    
+                    # Also save separate dot plot if they distinctly asked for "red/blue spread", which is 'dot'
+                    plt.figure()
+                    shap.summary_plot(vals_to_plot, X_shap, feature_names=X_test.columns, show=False, plot_type='dot')
+                    plt.title(f'{name} SHAP Summary (Dot)')
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(model_dir, f'shap_summary_dot_{name}.png'))
+                    plt.close()
+
             except Exception as e:
                 print(f"  SHAP calculation failed for {name}: {str(e)}")
             
