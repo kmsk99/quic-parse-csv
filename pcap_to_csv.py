@@ -500,13 +500,8 @@ def main():
     print("분석 시작...")
     print("=" * 80 + "\n")
     
-    total_stats = {
-        'full': 0,
-        5: 0,
-        10: 0,
-        15: 0,
-        20: 0
-    }
+    # Dynamically initialize total_stats based on config
+    total_stats = {key: 0 for key in config.DATASETS}
     
     for i, pcap_file in enumerate(pcap_files, 1):
         print(f"\n[{i}/{len(pcap_files)}] {pcap_file.name}")
@@ -514,17 +509,18 @@ def main():
         
         stats = analyze_pcap_file(pcap_file)
         
-        for key in stats:
+        # stats keys are strings ('full', '5', etc.)
+        for key, value in stats.items():
             if key in total_stats:
-                total_stats[key] += stats[key]
+                total_stats[key] += value
     
     print("\n" + "=" * 80)
     print("분석 완료!")
     print("=" * 80)
     print(f"\n처리된 Flow 통계:")
-    print(f"  - 전체 (full): {total_stats['full']} flows")
+    print(f"  - 전체 (full): {total_stats.get('full', 0)} flows")
     for window in PACKET_WINDOWS:
-        print(f"  - 첫 {window}개 패킷: {total_stats[window]} flows")
+        print(f"  - 첫 {window}개 패킷: {total_stats.get(str(window), 0)} flows")
     
     print(f"\n결과 저장 위치:")
     for window_name, folder in OUTPUT_FOLDERS.items():
