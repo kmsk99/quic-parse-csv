@@ -16,6 +16,10 @@ import lightgbm as lgb
 import xgboost as xgb
 import warnings
 from csv_to_md import convert_csv_to_md
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.inspection import permutation_importance
+import shap
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
@@ -24,7 +28,7 @@ warnings.filterwarnings('ignore')
 DATASET_ROOT = 'dataset'
 OUTPUT_ROOT = 'prediction'
 DATASETS = ['5', '10', '15', '20', 'full']
-LEAKAGE_COLUMNS = ['source_file', 'file', 'flow_id']
+LEAKAGE_COLUMNS = ['source_file', 'file', 'flow_id', 'client_ip', 'server_ip', 'client_port', 'server_port']
 
 # Ensure output directory exists
 os.makedirs(OUTPUT_ROOT, exist_ok=True)
@@ -142,6 +146,62 @@ def process_dataset(dataset_name):
             # Save Model
             model_path = os.path.join(model_dir, f'{name}.pkl')
             joblib.dump(model, model_path)
+
+            # Feature Importance (Permutation Importance)
+            print(f"  Calculating Feature Importance for {name}...")
+            r = permutation_importance(model, X_test_scaled, y_test_enc,
+                                       n_repeats=10,
+                                       random_state=42,
+                                       n_jobs=-1)
+            
+            # Create Feature Importance Plot
+            sorted_idx = r.importances_mean.argsort()[::-1][:20]  # Top 20
+            
+            plt.figure(figsize=(10, 8))
+            sns.barplot(x=r.importances_mean[sorted_idx], y=pd.Index(X_train.columns)[sorted_idx])
+            plt.title(f'{name} Feature Importance (Permutation)')
+            plt.xlabel('Importance Mean')
+            plt.tight_layout()
+            plt.savefig(os.path.join(model_dir, f'feature_importance_{name}.png'))
+            plt.close()
+
+            # SHAP Analysis
+            print(f"  Calculating SHAP for {name}...")
+            try:
+                # Use TreeExplainer for tree models, Linear for others, Kernel as fallback
+                if name in ['GBC', 'DT', 'RF', 'LGBM', 'XGB']:
+                    explainer = shap.TreeExplainer(model)
+                    shap_values = explainer.shap_values(X_test_scaled)
+                elif name in ['SVM', 'LR']:
+                    explainer = shap.LinearExplainer(model, X_train_scaled)
+                    shap_values = explainer.shap_values(X_test_scaled)
+                else:
+                    # KernelExplainer is slow, maybe skip or sample heavily
+                    # For now, stick to Tree/Linear which cover the best performers
+                    print(f"  Skipping SHAP for {name} (KernelExplainer too slow/complex for full run)")
+                    shap_values = None
+
+                if shap_values is not None:
+                    # Handle binary classification case where shap_values might be a list
+                    if isinstance(shap_values, list):
+                        # For binary, usually take the positive class (index 1)
+                        if len(shap_values) == 2:
+                            vals = shap_values[1]
+                        else:
+                            # Multiclass - might be complex to plot summary for all classes in one go simpler
+                            # Just plot for the first class or aggregate? 
+                            # summary_plot handles lists for multiclass
+                            vals = shap_values
+                    else:
+                        vals = shap_values
+
+                    plt.figure()
+                    shap.summary_plot(vals, X_test_scaled, feature_names=X_test.columns, show=False)
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(model_dir, f'shap_summary_{name}.png'))
+                    plt.close()
+            except Exception as e:
+                print(f"  SHAP calculation failed for {name}: {str(e)}")
             
         except Exception as e:
             print(f"  Error training {name}: {str(e)}")
