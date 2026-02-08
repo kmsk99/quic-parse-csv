@@ -1,9 +1,10 @@
+
 #!/usr/bin/env python3
 """
 merged 폴더의 각 CSV 파일을 독립적으로 train/test/valid로 분리하는 스크립트
 - 각 파일별로 가장 적은 라벨의 개수를 각 라벨의 최댓값으로 설정
 - 각 데이터셋에서 라벨 비율을 1:1:1:1로 유지
-- random seed 42 사용
+- random seed 사용 (config.RANDOM_SEED)
 - dataset/{folder_name}/train.csv, test.csv, valid.csv 형태로 저장
 """
 
@@ -11,22 +12,19 @@ import pandas as pd
 from pathlib import Path
 import numpy as np
 import re
+import sys
 
-MERGED_DIR = Path("merged")
-DATASET_DIR = Path("dataset")
-RANDOM_SEED = 42
+# Configuration Import
+import config
 
-# 필요한 라벨들
-REQUIRED_LABELS = ['NORMAL', 'GET_FLOOD', 'CONNECTION_FLOOD', 'SCAN']
+MERGED_DIR = config.MERGED_DIR
+DATASET_DIR = config.DATASET_DIR
+RANDOM_SEED = config.RANDOM_SEED
+REQUIRED_LABELS = config.REQUIRED_LABELS
 
 
 def get_folder_name_from_filename(filename):
-    """파일명에서 폴더명을 추출합니다.
-    
-    예: merged_5.csv -> "5"
-        merged_10.csv -> "10"
-        merged_full.csv -> "full"
-    """
+    """파일명에서 폴더명을 추출합니다."""
     match = re.search(r'merged_(\w+)\.csv', filename)
     if match:
         return match.group(1)
@@ -55,7 +53,6 @@ def balance_and_split(df, max_count_per_label, labels):
     np.random.seed(RANDOM_SEED)
     
     # train/test/valid로 분리 (70/15/15 비율)
-    # 각 라벨별로 분리하여 비율 유지
     train_dfs = []
     test_dfs = []
     valid_dfs = []
@@ -78,7 +75,7 @@ def balance_and_split(df, max_count_per_label, labels):
         n_total = len(label_df)
         n_train = int(n_total * 0.7)
         n_test = int(n_total * 0.15)
-        n_valid = n_total - n_train - n_test
+        # 나머지는 valid
         
         # 셔플
         label_df = label_df.sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True)
@@ -92,7 +89,7 @@ def balance_and_split(df, max_count_per_label, labels):
     test_df = pd.concat(test_dfs, ignore_index=True).sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True)
     valid_df = pd.concat(valid_dfs, ignore_index=True).sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True)
     
-    # label_normalized 컬럼 제거 (있는 경우)
+    # label_normalized 컬럼 제거
     for df in [train_df, test_df, valid_df]:
         if 'label_normalized' in df.columns:
             df.drop(columns=['label_normalized'], inplace=True)
@@ -178,20 +175,18 @@ def main():
     print("Dataset Split Script")
     print("=" * 80)
     
-    # dataset 디렉토리 생성
     DATASET_DIR.mkdir(exist_ok=True)
     
-    # merged 폴더의 모든 CSV 파일 찾기
     csv_files = sorted(MERGED_DIR.glob("*.csv"))
     
     if not csv_files:
-        raise ValueError(f"{MERGED_DIR} 폴더에 CSV 파일이 없습니다.")
+        print(f"⚠️ {MERGED_DIR} 폴더에 CSV 파일이 없습니다.")
+        return
     
     print(f"\nFound {len(csv_files)} CSV files:")
     for f in csv_files:
         print(f"  - {f.name}")
     
-    # 각 파일 처리
     for csv_file in csv_files:
         try:
             process_single_file(csv_file)
@@ -205,7 +200,6 @@ def main():
     print("✓ All datasets split completed!")
     print("=" * 80)
     print(f"\nAll datasets saved to {DATASET_DIR}/")
-    print(f"Each dataset has balanced labels (1:1:1:1 ratio)")
 
 
 if __name__ == "__main__":
