@@ -26,21 +26,24 @@ def get_label_from_filename(filename: str) -> str:
     파일명에서 label을 추출합니다.
     
     Args:
-        filename: 파일명 (예: "QUIC_CONNECT1.csv", "SCAN_HTTP3.csv")
+        filename: 파일명 (예: "normal_traffic_recording_15.csv", "GET_FLOOD_recording_1.csv")
         
     Returns:
-        label: "quic", "scan", "http", 또는 "normal"
+        label: "NORMAL", "GET_FLOOD", "CONNECTION_FLOOD", 또는 "SCAN"
     """
     filename_lower = filename.lower()
     
-    if 'quic_connect' in filename_lower or 'quicconnect' in filename_lower:
-        return 'quic'
+    if 'normal' in filename_lower:
+        return 'NORMAL'
     elif 'scan' in filename_lower:
-        return 'scan'
-    elif 'http' in filename_lower:
-        return 'http'
+        return 'SCAN'
+    elif 'quic' in filename_lower:
+        return 'CONNECTION_FLOOD'
+    elif 'get' in filename_lower:
+        return 'GET_FLOOD'
     else:
-        return 'normal'
+        # 나머지는 모두 GET_FLOOD
+        return 'GET_FLOOD'
 
 
 def merge_csv_files(folder_path: Path, output_file: Path) -> int:
