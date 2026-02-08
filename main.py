@@ -79,45 +79,27 @@ def setup_output_directories():
         folder.mkdir(parents=True, exist_ok=True)
 
 
-def find_first_pcap_in_folders(root_dir: Path) -> List[Path]:
+def find_all_pcap_files(root_dir: Path) -> List[Path]:
     """
-    모든 폴더(재귀적)에서 첫 번째 pcap 파일을 찾아 반환합니다.
+    모든 폴더(재귀적)에서 모든 pcap 파일을 찾아 반환합니다.
     
     Args:
         root_dir: pcap 파일들이 있는 루트 디렉토리
         
     Returns:
-        각 폴더의 첫 번째 pcap 파일 경로 리스트
+        모든 pcap 파일 경로 리스트
     """
     pcap_files = []
-    visited_dirs = set()
     
     if not root_dir.exists():
         print(f"경고: {root_dir} 디렉토리가 존재하지 않습니다.")
         return pcap_files
     
-    def find_pcaps_recursive(directory: Path):
-        """재귀적으로 각 폴더의 첫 번째 pcap 파일을 찾습니다."""
-        if directory in visited_dirs:
-            return
-        visited_dirs.add(directory)
-        
-        # 현재 디렉토리에서 직접 찾은 pcap 파일들
-        direct_pcaps = sorted([f for f in directory.glob("*.pcap") if f.is_file()])
-        
-        if direct_pcaps:
-            # 현재 디렉토리에 pcap 파일이 있으면 첫 번째 파일만 추가
-            pcap_files.append(direct_pcaps[0])
-        else:
-            # 현재 디렉토리에 pcap이 없으면 서브디렉토리 탐색
-            subdirs = sorted([d for d in directory.iterdir() if d.is_dir()])
-            for subdir in subdirs:
-                find_pcaps_recursive(subdir)
+    # 재귀적으로 모든 pcap 파일 찾기
+    pcap_files = sorted(root_dir.rglob("*.pcap"))
     
-    # 루트의 직접 서브디렉토리들을 순회
-    subdirs = sorted([d for d in root_dir.iterdir() if d.is_dir()])
-    for subdir in subdirs:
-        find_pcaps_recursive(subdir)
+    # 파일만 필터링 (디렉토리 제외)
+    pcap_files = [f for f in pcap_files if f.is_file()]
     
     return pcap_files
 
@@ -620,8 +602,8 @@ def main():
     setup_output_directories()
     print("✓ 출력 폴더 구조 생성 완료")
     
-    # 각 폴더에서 첫 번째 pcap 파일 찾기
-    pcap_files = find_first_pcap_in_folders(PCAP_ROOT_DIR)
+    # 모든 폴더에서 모든 pcap 파일 찾기
+    pcap_files = find_all_pcap_files(PCAP_ROOT_DIR)
     
     if not pcap_files:
         print("❌ 분석할 pcap 파일을 찾을 수 없습니다.")
