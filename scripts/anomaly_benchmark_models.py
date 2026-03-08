@@ -155,6 +155,15 @@ class AutoencoderDetector:
         reconstructed = self.model.predict(x)
         return np.mean((x - reconstructed) ** 2, axis=1)
 
+    def encode(self, x: np.ndarray) -> np.ndarray:
+        """Returns the bottleneck activation of the encoder half."""
+        hidden = x
+        encoder_layers = len(self.hidden_sizes) // 2 + 1
+        for layer_index in range(encoder_layers):
+            hidden = hidden @ self.model.coefs_[layer_index] + self.model.intercepts_[layer_index]
+            hidden = np.maximum(hidden, 0.0)
+        return hidden
+
     def metadata(self) -> dict[str, float | int | str]:
         return {
             "backend": "sklearn-mlp",

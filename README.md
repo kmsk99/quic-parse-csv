@@ -7,10 +7,11 @@ QUIC PCAP에서 flow/window 단위 특징을 추출하고, 분류 및 이상 탐
 
 ## 현재 상태
 
-현재 코드베이스 기준으로 anomaly benchmark까지 포함한 최신 결과가 정리되어 있습니다.
+현재 코드베이스 기준으로 anomaly benchmark와 autoencoder 잠재공간 분석까지 포함한 최신 결과가 정리되어 있습니다.
 
 - 종합 분석 문서: [docs/anomaly-analysis-summary.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-analysis-summary.md)
 - benchmark 비교 문서: [docs/anomaly-benchmark-comparison.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-benchmark-comparison.md)
+- autoencoder 잠재공간 문서: [docs/anomaly-autoencoder-latent.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-autoencoder-latent.md)
 - 결과 CSV/plot: [prediction/anomaly_benchmark](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark)
 
 현재 benchmark에서 가장 강한 모델은 `Autoencoder`였습니다.
@@ -26,6 +27,8 @@ QUIC PCAP에서 flow/window 단위 특징을 추출하고, 분류 및 이상 탐
 - 최종 단계: `ECOD`
 - reconstruction baseline: `PCAReconstruction`
 
+`Autoencoder`의 bottleneck(`24차원`) 잠재공간도 별도로 시각화했습니다. `5패킷` 잠재공간은 정상/비정상이 꽤 잘 갈리지만, `full`에서는 특히 `SCAN`이 정상 군집 쪽으로 더 가까워지는 경향이 보입니다. 2D뿐 아니라 3D `png/html`도 같이 생성합니다.
+
 ## 주요 기능
 
 - QUIC PCAP에서 flow/window 단위 CSV 생성
@@ -33,6 +36,8 @@ QUIC PCAP에서 flow/window 단위 특징을 추출하고, 분류 및 이상 탐
 - `source_file` 단위 분할 기반 anomaly benchmark
 - 다중 클래스 분류용 dataset split 및 학습 파이프라인
 - anomaly benchmark용 개별 모델 실행 스크립트 제공
+- autoencoder bottleneck latent space 시각화
+- autoencoder latent 3D `png/html` 생성
 - ROC, PR, score distribution, attack recall, two-stage policy plot 생성
 
 ## 추출 특징 요약
@@ -63,6 +68,7 @@ QUIC PCAP에서 flow/window 단위 특징을 추출하고, 분류 및 이상 탐
 | `train_anomaly_models.py` | 초기 one-class baseline 실험용 스크립트 |
 | `scripts/run_anomaly_benchmarks.py` | anomaly benchmark 전체 실행 |
 | `scripts/train_anomaly_*.py` | 모델별 anomaly benchmark 실행 스크립트 |
+| `scripts/visualize_autoencoder_latent.py` | 학습된 autoencoder의 bottleneck 잠재공간 시각화 |
 | `output/` | packet window별 원본 특징 CSV |
 | `merged/` | window별 병합 CSV |
 | `dataset/` | 분류용 train/test/valid 데이터셋 |
@@ -146,6 +152,16 @@ uv run python scripts/train_anomaly_pca.py
 uv run python scripts/train_anomaly_autoencoder.py
 ```
 
+### 6. autoencoder 잠재공간 시각화
+
+이미 학습된 autoencoder artifact를 재사용해서 bottleneck 잠재공간을 시각화합니다.
+
+```bash
+uv run python scripts/visualize_autoencoder_latent.py
+```
+
+산출물은 `prediction/anomaly_benchmark/autoencoder/{5,full}/`와 `docs/anomaly-autoencoder-latent.md`에 저장됩니다.
+
 ## anomaly benchmark 구성
 
 현재 benchmark는 다음 조건으로 고정되어 있습니다.
@@ -180,11 +196,63 @@ uv run python scripts/train_anomaly_autoencoder.py
 - `ECOD`는 초기 단계보다는 full-stage baseline으로 더 적합했습니다.
 - `PCAReconstruction`은 초기 단계에는 부적합하지만 full-stage reconstruction baseline으로는 경쟁력이 있었습니다.
 - `IsolationForest`는 이번 데이터에서는 가장 약한 baseline이었습니다.
+- autoencoder bottleneck 시각화에서는 `5패킷` 잠재공간이 더 선명했고, `full`에서는 `SCAN`이 NORMAL과 가까워지는 경향이 관찰됐습니다.
+- 3D PCA/t-SNE에서도 같은 경향이 유지됐고, `full`에서는 `SCAN`이 NORMAL 주변으로 다시 말려 들어오는 구조가 더 분명하게 보였습니다.
 
 중요한 해석 포인트:
 
 - aggregate PR-AUC만 보면 모델 차이가 작아 보일 수 있지만, 실제로는 공격 유형별 재현율 차이가 큽니다.
 - validation에서 잡은 threshold가 test에서 그대로 유지되지 않는 경우가 많아서, score calibration과 더 강한 홀드아웃 검증이 필요합니다.
+- 성능이 좋은 단일 모델이 있다고 해도 잠재공간 구조가 항상 깔끔한 것은 아니므로, reconstruction score와 latent geometry를 같이 보는 것이 해석에 유리합니다.
+
+## Autoencoder 잠재공간 결과
+
+잠재공간 결과는 README에서도 바로 확인할 수 있게 2D와 3D를 함께 남겨둡니다.
+
+- `5패킷` latent는 정상/비정상 분리가 비교적 선명했습니다.
+  - binary silhouette: `0.7038`
+  - NORMAL centroid 대비 거리:
+    - `GET_FLOOD 12.4369`
+    - `CONNECTION_FLOOD 13.8504`
+    - `SCAN 12.6275`
+- `full` latent는 `SCAN`이 NORMAL 근처로 가까워졌습니다.
+  - binary silhouette: `-0.1546`
+  - NORMAL centroid 대비 거리:
+    - `GET_FLOOD 7.3797`
+    - `CONNECTION_FLOOD 6.1139`
+    - `SCAN 1.3703`
+
+### 5패킷 2D 결과
+
+![5패킷 latent PCA 2D](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/5/latent_pca.png)
+
+![5패킷 latent t-SNE 2D](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/5/latent_tsne.png)
+
+### 5패킷 3D 결과
+
+![5패킷 latent PCA 3D](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/5/latent_pca_3d.png)
+
+![5패킷 latent t-SNE 3D](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/5/latent_tsne_3d.png)
+
+- 인터랙티브 HTML:
+  - [5패킷 PCA 3D HTML](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/5/latent_pca_3d.html)
+  - [5패킷 t-SNE 3D HTML](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/5/latent_tsne_3d.html)
+
+### 전체 flow 2D 결과
+
+![전체 flow latent PCA 2D](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/full/latent_pca.png)
+
+![전체 flow latent t-SNE 2D](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/full/latent_tsne.png)
+
+### 전체 flow 3D 결과
+
+![전체 flow latent PCA 3D](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/full/latent_pca_3d.png)
+
+![전체 flow latent t-SNE 3D](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/full/latent_tsne_3d.png)
+
+- 인터랙티브 HTML:
+  - [전체 flow PCA 3D HTML](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/full/latent_pca_3d.html)
+  - [전체 flow t-SNE 3D HTML](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/full/latent_tsne_3d.html)
 
 ## 주요 결과 파일
 
@@ -192,6 +260,11 @@ uv run python scripts/train_anomaly_autoencoder.py
 - 정책 비교 CSV: [prediction/anomaly_benchmark/comparison/policy_comparison.csv](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/comparison/policy_comparison.csv)
 - 비교 문서: [docs/anomaly-benchmark-comparison.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-benchmark-comparison.md)
 - 종합 분석 문서: [docs/anomaly-analysis-summary.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-analysis-summary.md)
+- autoencoder 잠재공간 문서: [docs/anomaly-autoencoder-latent.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-autoencoder-latent.md)
+- 5패킷 latent PCA: [prediction/anomaly_benchmark/autoencoder/5/latent_pca.png](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/5/latent_pca.png)
+- 전체 flow latent PCA: [prediction/anomaly_benchmark/autoencoder/full/latent_pca.png](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/full/latent_pca.png)
+- 5패킷 latent PCA 3D HTML: [prediction/anomaly_benchmark/autoencoder/5/latent_pca_3d.html](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/5/latent_pca_3d.html)
+- 전체 flow latent PCA 3D HTML: [prediction/anomaly_benchmark/autoencoder/full/latent_pca_3d.html](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/autoencoder/full/latent_pca_3d.html)
 
 모델별 문서:
 
