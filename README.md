@@ -1,39 +1,77 @@
-# QUIC pcap 파일 분석 및 탐지 연구 도구
+# QUIC PCAP 특징 추출 및 이상 탐지 연구 도구
 
-QUIC pcap 파일에서 각 flow의 **64개 특징**을 추출하고 머신러닝 모델을 훈련하는 통합 도구입니다. DDoS 공격 탐지 연구를 위한 논문 기반 특징 추출 및 분석 기능을 제공합니다.
+QUIC PCAP에서 flow/window 단위 특징을 추출하고, 분류 및 이상 탐지 실험까지 수행하기 위한 연구용 저장소입니다. 현재 저장소는 다음 두 흐름을 모두 지원합니다.
 
-**크로스 플랫폼 지원**: Windows, macOS, Linux에서 모두 실행 가능합니다.
+- 다중 클래스 분류용 데이터셋 생성 및 모델 학습
+- `NORMAL`만 학습하는 one-class / anomaly detection 벤치마크
 
-## 기능
+## 현재 상태
 
-- **모듈형 파이프라인**: 특징 추출, 라벨링/병합, 데이터셋 분할, 모델 학습이 독립적인 모듈로 분리됨
-- **Data Leakage 자동 방지**: 구조적 격리(Structural Isolation)를 통해 미래 정보가 학습 데이터에 포함되는 것을 원천 차단
-- **QUIC flow 자동 감지 및 분리**
-- **64개 특징 추출** (논문 기반):
-  - **패킷 및 바이트 수**: 전체, incoming, outgoing
-  - **패킷 크기 통계**: mean, min, max, std, variance, CV (전체/방향별)
-  - **IAT (Inter-Arrival Time) 통계**: mean, min, max, std, variance (전체/방향별)
-  - **QUIC 프로토콜 특징**: Spin Bit (count/ratio), 패킷 유형별 개수 및 비율 (Initial, Handshake, 0-RTT, 1-RTT, Retry)
-  - **엔트로피**: 패킷 방향 및 크기 엔트로피
-  - **Flow 메타데이터**: Duration, IP/Port, flow_id 등
-- **윈도우 분석**: 전체 flow뿐만 아니라 초기 패킷(5, 10, 15, 20개) 기반 Early Classification 지원
-- **tshark 직접 사용**: pyshark보다 10-50배 빠른 속도 및 낮은 메모리 사용량
+현재 코드베이스 기준으로 anomaly benchmark까지 포함한 최신 결과가 정리되어 있습니다.
+
+- 종합 분석 문서: [docs/anomaly-analysis-summary.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-analysis-summary.md)
+- benchmark 비교 문서: [docs/anomaly-benchmark-comparison.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-benchmark-comparison.md)
+- 결과 CSV/plot: [prediction/anomaly_benchmark](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark)
+
+현재 benchmark에서 가장 강한 모델은 `Autoencoder`였습니다.
+
+| 단계 | 최고 모델 | 주요 수치 |
+| --- | --- | --- |
+| `merged_5.csv` | `Autoencoder` | recall `1.0000`, F1 `0.9995`, normal FPR `0.1204` |
+| `merged_full.csv` | `Autoencoder` | recall `0.9908`, F1 `0.9950`, normal FPR `0.1002` |
+
+고전적 baseline 중에서는 다음이 상대적으로 의미 있었습니다.
+
+- 초기 단계: `HBOS`
+- 최종 단계: `ECOD`
+- reconstruction baseline: `PCAReconstruction`
+
+## 주요 기능
+
+- QUIC PCAP에서 flow/window 단위 CSV 생성
+- packet window `1~30` 및 `full` 데이터셋 지원
+- `source_file` 단위 분할 기반 anomaly benchmark
+- 다중 클래스 분류용 dataset split 및 학습 파이프라인
+- anomaly benchmark용 개별 모델 실행 스크립트 제공
+- ROC, PR, score distribution, attack recall, two-stage policy plot 생성
+
+## 추출 특징 요약
+
+현재 merged 데이터 기준으로 메타데이터를 제외한 수치 feature는 약 `176개`입니다. 주요 특징군은 다음과 같습니다.
+
+- 패킷/바이트 수 통계
+- 패킷 크기 통계
+- IAT 통계
+- short/long header, packet type 비율
+- entropy 계열 특징
+- QUIC packet length / payload length 통계
+- spin bit / fixed bit / version 관련 특징
+- DCID / SCID 길이 및 변화량 통계
+- packet number 길이 및 gap 통계
+- frame type count / ratio
+- ACK delay 통계
 
 ## 프로젝트 구조
 
-| 파일 | 역할 |
+| 경로 | 역할 |
 | :--- | :--- |
-| `config.py` | **통합 설정**: 모든 경로, 라벨, 패킷 윈도우 크기 등을 한곳에서 관리 |
-| `pcap_to_csv.py` | **추출**: PCAP 파일에서 64개 특징을 추출하여 CSV로 저장 (Leakage-free) |
-| `label_and_merge.py` | **라벨링**: 파일명 기반 라벨 할당 및 지역 CSV 병합 |
-| `split_dataset.py` | **분할**: 1:1:1:1 비율로 정답 라벨 균형을 맞춘 Train/Test/Valid 데이터셋 생성 |
-| `train_models.py` | **학습 & XAI**: 여러 모델 학습 및 SHAP, Permutation Importance 분석 |
-| `preprocess.sh` | **자동화**: PCAP에서 데이터셋 생성까지 모든 전처리 과정을 자동 실행 |
+| `config.py` | 공통 경로, 패킷 윈도우, 라벨, 랜덤 시드 설정 |
+| `pcap_to_csv.py` | PCAP에서 window별 CSV 추출 |
+| `label_and_merge.py` | `output/` CSV를 병합하고 라벨 추가 |
+| `split_dataset.py` | 다중 클래스 분류용 train/test/valid 분할 |
+| `train_models.py` | 다중 클래스 분류 모델 학습 및 중요도 분석 |
+| `train_anomaly_models.py` | 초기 one-class baseline 실험용 스크립트 |
+| `scripts/run_anomaly_benchmarks.py` | anomaly benchmark 전체 실행 |
+| `scripts/train_anomaly_*.py` | 모델별 anomaly benchmark 실행 스크립트 |
+| `output/` | packet window별 원본 특징 CSV |
+| `merged/` | window별 병합 CSV |
+| `dataset/` | 분류용 train/test/valid 데이터셋 |
+| `prediction/` | 분류 및 anomaly 실험 산출물 |
+| `docs/` | 설계 문서, benchmark 비교 문서, 종합 분석 문서 |
 
 ## 설치
 
-### 1. uv 설치
-[uv](https://github.com/astral-sh/uv)를 사용하여 의존성을 관리합니다.
+### 1. `uv` 설치
 
 ```bash
 # macOS/Linux
@@ -43,7 +81,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-### 2. Wireshark (tshark) 설치
+### 2. Wireshark (`tshark`) 설치
+
 `tshark`가 시스템 PATH에 있어야 합니다.
 
 ```bash
@@ -54,50 +93,135 @@ brew install wireshark
 sudo apt-get install tshark
 ```
 
-### 3. 프로젝트 의존성 설치
+### 3. 의존성 설치
+
 ```bash
 uv sync
 ```
 
 ## 사용법
 
-### 1. 설정 (`config.py` & `.env`)
-`.env` 파일에 PCAP 파일의 루트 경로를 설정합니다:
+### 1. `.env` 설정
+
 ```bash
 PCAP_ROOT_DIR=/path/to/your/quic/pcaps
 ```
-필요한 경우 `config.py`에서 패킷 윈도우 크기(`PACKET_WINDOWS`)나 라벨 설정을 변경할 수 있습니다.
 
-### 2. 데이터 전처리 (PCAP -> Dataset)
-자동화된 쉘 스크립트를 사용하여 특징 추출부터 데이터셋 분할까지 완료합니다:
+필요하면 [config.py](/Users/gimminseog/project/quic-parse-csv/config.py)에서 패킷 윈도우, 라벨, 경로를 조정합니다.
+
+### 2. 전처리 실행
+
+PCAP에서 `output/`, `merged/`, `dataset/`까지 생성합니다.
+
 ```bash
 chmod +x preprocess.sh
 ./preprocess.sh
 ```
 
-### 3. 모델 학습 및 분석
+### 3. 다중 클래스 분류 실험
+
 ```bash
 uv run python train_models.py
 ```
-학습이 완료되면 `prediction/` 폴더에 모델 파일(`.pkl`), 학습 결과(`results.csv`), 그리고 SHAP 및 특징 중요도 그래프가 저장됩니다.
+
+산출물은 `prediction/<window>/` 아래에 저장됩니다.
+
+### 4. anomaly benchmark 전체 실행
+
+```bash
+uv run python scripts/run_anomaly_benchmarks.py
+```
+
+산출물은 `prediction/anomaly_benchmark/` 아래에 저장됩니다.
+
+### 5. anomaly benchmark 개별 실행
+
+원하는 모델만 따로 돌릴 수도 있습니다.
+
+```bash
+uv run python scripts/train_anomaly_isolation_forest.py
+uv run python scripts/train_anomaly_hbos.py
+uv run python scripts/train_anomaly_ecod.py
+uv run python scripts/train_anomaly_pca.py
+uv run python scripts/train_anomaly_autoencoder.py
+```
+
+## anomaly benchmark 구성
+
+현재 benchmark는 다음 조건으로 고정되어 있습니다.
+
+- 학습 데이터: `NORMAL` only
+- 검증/테스트 데이터: `NORMAL + ABNORMAL`
+- 분할 단위: `source_file`
+- 대상 데이터:
+  - `merged_5.csv`
+  - `merged_full.csv`
+
+비교 모델:
+
+- `IsolationForest`
+- `HBOS`
+- `ECOD`
+- `PCAReconstruction`
+- `Autoencoder`
+
+2단계 정책도 함께 평가합니다.
+
+- `early_warning`
+- `final_confirmation`
+- `any_stage`
+
+## 최신 결과 요약
+
+자세한 내용은 [docs/anomaly-analysis-summary.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-analysis-summary.md)에 정리되어 있습니다. 핵심만 요약하면 다음과 같습니다.
+
+- `Autoencoder`가 초기 단계와 최종 단계 모두 가장 강했습니다.
+- `HBOS`는 초기 단계 classical baseline으로는 의미가 있지만 정상 오탐이 높았습니다.
+- `ECOD`는 초기 단계보다는 full-stage baseline으로 더 적합했습니다.
+- `PCAReconstruction`은 초기 단계에는 부적합하지만 full-stage reconstruction baseline으로는 경쟁력이 있었습니다.
+- `IsolationForest`는 이번 데이터에서는 가장 약한 baseline이었습니다.
+
+중요한 해석 포인트:
+
+- aggregate PR-AUC만 보면 모델 차이가 작아 보일 수 있지만, 실제로는 공격 유형별 재현율 차이가 큽니다.
+- validation에서 잡은 threshold가 test에서 그대로 유지되지 않는 경우가 많아서, score calibration과 더 강한 홀드아웃 검증이 필요합니다.
+
+## 주요 결과 파일
+
+- benchmark 비교 CSV: [prediction/anomaly_benchmark/comparison/test_model_comparison.csv](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/comparison/test_model_comparison.csv)
+- 정책 비교 CSV: [prediction/anomaly_benchmark/comparison/policy_comparison.csv](/Users/gimminseog/project/quic-parse-csv/prediction/anomaly_benchmark/comparison/policy_comparison.csv)
+- 비교 문서: [docs/anomaly-benchmark-comparison.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-benchmark-comparison.md)
+- 종합 분석 문서: [docs/anomaly-analysis-summary.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-analysis-summary.md)
+
+모델별 문서:
+
+- [docs/anomaly-autoencoder.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-autoencoder.md)
+- [docs/anomaly-hbos.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-hbos.md)
+- [docs/anomaly-ecod.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-ecod.md)
+- [docs/anomaly-isolation-forest.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-isolation-forest.md)
+- [docs/anomaly-pca-reconstruction.md](/Users/gimminseog/project/quic-parse-csv/docs/anomaly-pca-reconstruction.md)
 
 ## Data Leakage 방지 설계
 
-본 도구는 연구의 신뢰성을 위해 다음 두 단계의 누수 방지 로직을 강제합니다:
+이 저장소는 특징 추출 단계에서 미래 정보를 직접 참조하지 않도록 설계되어 있습니다.
 
-1.  **구조적 격리 (Structural Isolation)**: 특징 추출 함수(`calculate_comprehensive_statistics`)는 오직 전달받은 잘려진(sliced) 패킷 리스트에만 접근할 수 있습니다. 전체 Flow 길이나 미래의 패킷 정보를 물리적으로 알 수 없는 상태에서 계산됩니다.
-2.  **화이트리스트 메타데이터**: 윈도우 데이터셋 생성 시 `total_packets_in_flow`와 같은 미래의 정보가 포함된 필드는 엄격히 제외됩니다.
+1. **구조적 격리**
+   전달된 packet slice만으로 특징을 계산하고, 전체 flow의 미래 패킷 정보를 직접 읽지 않습니다.
+
+2. **메타데이터 분리**
+   모델 학습 시 `file`, `flow_id`, IP/Port 같은 식별자 컬럼은 feature에서 제외합니다.
+
+3. **파일 단위 홀드아웃**
+   anomaly benchmark는 row가 아니라 `source_file` 단위로 분할해서 동일 capture에서 나온 유사 flow가 train/test에 동시에 섞이지 않게 합니다.
 
 ## 요구사항
 
 - Python 3.10 이상
-- Wireshark/tshark 4.0 이상
-- uv (패키지 관리자)
+- Wireshark / tshark 4.0 이상
+- `uv`
 
-## 연구 참고
+## 다음 권장 작업
 
-본 도구는 다음 특징을 기반으로 트래픽을 분석합니다:
-- **Volume**: 패킷 및 바이트 수 통계
-- **Packet Size**: 크기의 분포 및 무작위성(엔트로피)
-- **Time (IAT)**: 패킷 간 도착 시간 간격
-- **QUIC Specific**: Spin Bit 및 0-RTT/1-RTT 패킷 유형 분석
+1. `Autoencoder`의 threshold를 더 보수적으로 튜닝해서 normal FPR을 낮춥니다.
+2. `source_file`보다 더 강한 홀드아웃 기준으로 일반화 성능을 다시 검증합니다.
+3. 이후에는 packet size / direction / IAT sequence를 직접 쓰는 sequence anomaly detection으로 확장할 수 있습니다.
