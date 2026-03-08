@@ -35,9 +35,11 @@ env/
 *.swp
 *.swo
 
-# Output files
-# output/
+# Generated data / artifacts
+output/
 merged/
+dataset/
+prediction/
 
 # OS
 .DS_Store
