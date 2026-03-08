@@ -1,0 +1,68 @@
+{
+  "model": "Autoencoder",
+  "slug": "autoencoder",
+  "test_results": [
+    {
+      "dataset": "5",
+      "stage": "Early Warning (5 packets)",
+      "objective": "early",
+      "split": "test",
+      "model": "Autoencoder",
+      "roc_auc": 0.9098438371404435,
+      "pr_auc": 0.9974655633619285,
+      "threshold": 0.006532498560187377,
+      "precision": 0.999092928329709,
+      "recall": 1.0,
+      "f1": 0.9995462583767685,
+      "normal_fpr": 0.12037037037037036,
+      "anomaly_recall": 1.0,
+      "recall_get_flood": 1.0,
+      "recall_connection_flood": 1.0,
+      "recall_scan": 1.0
+    },
+    {
+      "dataset": "full",
+      "stage": "Final Confirmation (full flow)",
+      "objective": "final",
+      "split": "test",
+      "model": "Autoencoder",
+      "roc_auc": 0.9850790877594189,
+      "pr_auc": 0.9997001203240046,
+      "threshold": 0.028157697256623634,
+      "precision": 0.9992369548629454,
+      "recall": 0.9907582000605256,
+      "f1": 0.9949795147838386,
+      "normal_fpr": 0.10015408320493066,
+      "anomaly_recall": 0.9907582000605256,
+      "recall_get_flood": 1.0,
+      "recall_connection_flood": 0.9999580583827312,
+      "recall_scan": 0.9391351184979994
+    }
+  ],
+  "two_stage_policy": [
+    {
+      "model": "Autoencoder",
+      "policy": "early_warning",
+      "precision": 0.999092928329709,
+      "recall": 1.0,
+      "f1": 0.9995462583767685,
+      "normal_fpr": 0.12037037037037036
+    },
+    {
+      "model": "Autoencoder",
+      "policy": "final_confirmation",
+      "precision": 0.9992486763790898,
+      "recall": 0.9907580924889132,
+      "f1": 0.9949852714265676,
+      "normal_fpr": 0.09876543209876543
+    },
+    {
+      "model": "Autoencoder",
+      "policy": "any_stage",
+      "precision": 0.9985471535833004,
+      "recall": 1.0,
+      "f1": 0.9992730487173671,
+      "normal_fpr": 0.19290123456790123
+    }
+  ]
+}

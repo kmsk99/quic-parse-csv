@@ -1,0 +1,68 @@
+{
+  "model": "HBOS",
+  "slug": "hbos",
+  "test_results": [
+    {
+      "dataset": "5",
+      "stage": "Early Warning (5 packets)",
+      "objective": "early",
+      "split": "test",
+      "model": "HBOS",
+      "roc_auc": 0.7304167200152092,
+      "pr_auc": 0.9946472151814899,
+      "threshold": 83.20691782740681,
+      "precision": 0.9977937860338124,
+      "recall": 0.9528243688382433,
+      "f1": 0.9747907165057099,
+      "normal_fpr": 0.279320987654321,
+      "anomaly_recall": 0.9528243688382433,
+      "recall_get_flood": 0.7920863309352518,
+      "recall_connection_flood": 0.9486634604630354,
+      "recall_scan": 0.9929203539823008
+    },
+    {
+      "dataset": "full",
+      "stage": "Final Confirmation (full flow)",
+      "objective": "final",
+      "split": "test",
+      "model": "HBOS",
+      "roc_auc": 0.7919735050204106,
+      "pr_auc": 0.9928086651179279,
+      "threshold": 106.3353799338301,
+      "precision": 0.9977018996722827,
+      "recall": 0.853993528412133,
+      "f1": 0.9202711770866651,
+      "normal_fpr": 0.26040061633281975,
+      "anomaly_recall": 0.853993528412133,
+      "recall_get_flood": 0.5431654676258992,
+      "recall_connection_flood": 0.9990772844200873,
+      "recall_scan": 0.08871960603262542
+    }
+  ],
+  "two_stage_policy": [
+    {
+      "model": "HBOS",
+      "policy": "early_warning",
+      "precision": 0.9977937860338124,
+      "recall": 0.9528243688382433,
+      "f1": 0.9747907165057099,
+      "normal_fpr": 0.279320987654321
+    },
+    {
+      "model": "HBOS",
+      "policy": "final_confirmation",
+      "precision": 0.9977154357670288,
+      "recall": 0.8539918289432332,
+      "f1": 0.9202759485732205,
+      "normal_fpr": 0.25925925925925924
+    },
+    {
+      "model": "HBOS",
+      "policy": "any_stage",
+      "precision": 0.997440521202955,
+      "recall": 0.997928136603308,
+      "f1": 0.9976842693229688,
+      "normal_fpr": 0.3395061728395062
+    }
+  ]
+}

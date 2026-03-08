@@ -1,0 +1,68 @@
+{
+  "model": "PCAReconstruction",
+  "slug": "pca_reconstruction",
+  "test_results": [
+    {
+      "dataset": "5",
+      "stage": "Early Warning (5 packets)",
+      "objective": "early",
+      "split": "test",
+      "model": "PCAReconstruction",
+      "roc_auc": 0.8043330656206472,
+      "pr_auc": 0.9933658188476561,
+      "threshold": 0.07173840708312483,
+      "precision": 0.9959938366718027,
+      "recall": 0.22571671341938937,
+      "f1": 0.36802899898465596,
+      "normal_fpr": 0.12037037037037036,
+      "anomaly_recall": 0.22571671341938937,
+      "recall_get_flood": 0.9856115107913669,
+      "recall_connection_flood": 0.07117492450508892,
+      "recall_scan": 0.9950750288572527
+    },
+    {
+      "dataset": "full",
+      "stage": "Final Confirmation (full flow)",
+      "objective": "final",
+      "split": "test",
+      "model": "PCAReconstruction",
+      "roc_auc": 0.9713761312105813,
+      "pr_auc": 0.9995843787238459,
+      "threshold": 0.06628047554934001,
+      "precision": 0.9990515708358032,
+      "recall": 0.8827781269641735,
+      "f1": 0.9373227295478561,
+      "normal_fpr": 0.11093990755007704,
+      "anomaly_recall": 0.8827781269641735,
+      "recall_get_flood": 0.9474820143884892,
+      "recall_connection_flood": 0.9817833575662678,
+      "recall_scan": 0.3309479839950754
+    }
+  ],
+  "two_stage_policy": [
+    {
+      "model": "PCAReconstruction",
+      "policy": "early_warning",
+      "precision": 0.9959938366718027,
+      "recall": 0.22571671341938937,
+      "f1": 0.36802899898465596,
+      "normal_fpr": 0.12037037037037036
+    },
+    {
+      "model": "PCAReconstruction",
+      "policy": "final_confirmation",
+      "precision": 0.999064718822863,
+      "recall": 0.8827767625388474,
+      "f1": 0.9373277470863767,
+      "normal_fpr": 0.1095679012345679
+    },
+    {
+      "model": "PCAReconstruction",
+      "policy": "any_stage",
+      "precision": 0.9985886669959777,
+      "recall": 0.9882788402220851,
+      "f1": 0.9934070048379832,
+      "normal_fpr": 0.18518518518518517
+    }
+  ]
+}

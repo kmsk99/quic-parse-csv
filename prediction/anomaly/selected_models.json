@@ -1,0 +1,12 @@
+{
+  "early": {
+    "dataset": "5",
+    "model": "LOF",
+    "threshold": 3.7021395041879943
+  },
+  "final": {
+    "dataset": "full",
+    "model": "LOF",
+    "threshold": 2.3287829382964826
+  }
+}

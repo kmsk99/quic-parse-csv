@@ -1,0 +1,21 @@
+{
+  "stage": "Final Confirmation (full flow)",
+  "objective": "final",
+  "threshold": 0.4977814756599999,
+  "max_normal_fpr": 0.05,
+  "valid_metrics": {
+    "threshold": 0.4977814756599999,
+    "precision": 0.9997135175635771,
+    "recall": 0.8678476460122817,
+    "f1": 0.9291251497680515,
+    "normal_fpr": 0.04933586337760911,
+    "anomaly_recall": 0.8678476460122817,
+    "recall_get_flood": 0.42724795640326974,
+    "recall_connection_flood": 0.9995216748056108,
+    "recall_scan": 0.007179647260808491
+  },
+  "metadata": {
+    "backend": "sklearn",
+    "n_estimators": 300
+  }
+}

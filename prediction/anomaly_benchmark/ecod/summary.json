@@ -1,0 +1,68 @@
+{
+  "model": "ECOD",
+  "slug": "ecod",
+  "test_results": [
+    {
+      "dataset": "5",
+      "stage": "Early Warning (5 packets)",
+      "objective": "early",
+      "split": "test",
+      "model": "ECOD",
+      "roc_auc": 0.6775859816843137,
+      "pr_auc": 0.9871059306154828,
+      "threshold": 104.9114898153512,
+      "precision": 0.9970273483947681,
+      "recall": 0.722230628659225,
+      "f1": 0.8376679919269374,
+      "normal_fpr": 0.2854938271604938,
+      "anomaly_recall": 0.722230628659225,
+      "recall_get_flood": 0.010071942446043165,
+      "recall_connection_flood": 0.8671569175707415,
+      "recall_scan": 0.0006925740669488264
+    },
+    {
+      "dataset": "full",
+      "stage": "Final Confirmation (full flow)",
+      "objective": "final",
+      "split": "test",
+      "model": "ECOD",
+      "roc_auc": 0.8820551837895156,
+      "pr_auc": 0.9964498613953673,
+      "threshold": 126.10115801474687,
+      "precision": 0.9980586390562,
+      "recall": 0.9334916311660497,
+      "f1": 0.9646959764238888,
+      "normal_fpr": 0.24036979969183359,
+      "anomaly_recall": 0.9334916311660497,
+      "recall_get_flood": 0.4956834532374101,
+      "recall_connection_flood": 0.9999161167654624,
+      "recall_scan": 0.6147276084949215
+    }
+  ],
+  "two_stage_policy": [
+    {
+      "model": "ECOD",
+      "policy": "early_warning",
+      "precision": 0.9970273483947681,
+      "recall": 0.722230628659225,
+      "f1": 0.8376679919269374,
+      "normal_fpr": 0.2854938271604938
+    },
+    {
+      "model": "ECOD",
+      "policy": "final_confirmation",
+      "precision": 0.9980710356671728,
+      "recall": 0.933490857029786,
+      "f1": 0.964701353846524,
+      "normal_fpr": 0.23919753086419754
+    },
+    {
+      "model": "ECOD",
+      "policy": "any_stage",
+      "precision": 0.9975003109066036,
+      "recall": 0.9336072538498248,
+      "f1": 0.9644967923858997,
+      "normal_fpr": 0.3101851851851852
+    }
+  ]
+}

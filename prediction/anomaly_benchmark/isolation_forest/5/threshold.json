@@ -1,0 +1,21 @@
+{
+  "stage": "Early Warning (5 packets)",
+  "objective": "early",
+  "threshold": 0.48129059261492946,
+  "max_normal_fpr": 0.1,
+  "valid_metrics": {
+    "threshold": 0.48129059261492946,
+    "precision": 0.9993803031747545,
+    "recall": 0.8081801009984195,
+    "f1": 0.8936678104818944,
+    "normal_fpr": 0.0994263862332696,
+    "anomaly_recall": 0.8081801009984195,
+    "recall_get_flood": 0.03160762942779292,
+    "recall_connection_flood": 0.938687343604475,
+    "recall_scan": 0.01162972213549797
+  },
+  "metadata": {
+    "backend": "sklearn",
+    "n_estimators": 300
+  }
+}

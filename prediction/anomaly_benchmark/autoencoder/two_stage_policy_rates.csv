@@ -1,0 +1,13 @@
+model,policy,label,flag_rate
+Autoencoder,early_warning,NORMAL,0.12037037037037036
+Autoencoder,early_warning,GET_FLOOD,1.0
+Autoencoder,early_warning,CONNECTION_FLOOD,1.0
+Autoencoder,early_warning,SCAN,1.0
+Autoencoder,final_confirmation,NORMAL,0.09876543209876543
+Autoencoder,final_confirmation,GET_FLOOD,1.0
+Autoencoder,final_confirmation,CONNECTION_FLOOD,0.9999580583827312
+Autoencoder,final_confirmation,SCAN,0.9391304347826087
+Autoencoder,any_stage,NORMAL,0.19290123456790123
+Autoencoder,any_stage,GET_FLOOD,1.0
+Autoencoder,any_stage,CONNECTION_FLOOD,1.0
+Autoencoder,any_stage,SCAN,1.0

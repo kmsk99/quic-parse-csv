@@ -36,10 +36,10 @@ env/
 *.swo
 
 # Generated data / artifacts
-output/
+# output/
 merged/
-dataset/
-prediction/
+# dataset/
+# prediction/
 
 # OS
 .DS_Store

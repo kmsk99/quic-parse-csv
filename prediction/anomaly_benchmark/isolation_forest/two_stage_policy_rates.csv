@@ -1,0 +1,13 @@
+model,policy,label,flag_rate
+IsolationForest,early_warning,NORMAL,0.27469135802469136
+IsolationForest,early_warning,GET_FLOOD,0.031654676258992806
+IsolationForest,early_warning,CONNECTION_FLOOD,0.9322223464936807
+IsolationForest,early_warning,SCAN,0.008156983455175067
+IsolationForest,final_confirmation,NORMAL,0.23765432098765432
+IsolationForest,final_confirmation,GET_FLOOD,0.23597122302158274
+IsolationForest,final_confirmation,CONNECTION_FLOOD,0.9978749580583828
+IsolationForest,final_confirmation,SCAN,0.0012312427856868025
+IsolationForest,any_stage,NORMAL,0.3441358024691358
+IsolationForest,any_stage,GET_FLOOD,0.25755395683453236
+IsolationForest,any_stage,CONNECTION_FLOOD,0.9981825299183537
+IsolationForest,any_stage,SCAN,0.009003462870334744

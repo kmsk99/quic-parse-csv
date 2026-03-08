@@ -1,0 +1,18 @@
+{
+  "stage": "full",
+  "stage_title": "Final Confirmation (full flow)",
+  "test_rows": 86563,
+  "latent_dim": 24,
+  "sampled_rows_for_tsne": 7039,
+  "pca_explained_variance_ratio": [
+    0.6297085750768643,
+    0.21618962587094012
+  ],
+  "pca3d_explained_variance_ratio": [
+    0.6297085750768643,
+    0.21618962587094012,
+    0.14792392834110563
+  ],
+  "silhouette_multiclass": 0.3474029149589279,
+  "silhouette_binary": -0.15460284117559528
+}

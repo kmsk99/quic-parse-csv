@@ -1,0 +1,18 @@
+{
+  "stage": "5",
+  "stage_title": "Early Warning (5 packets)",
+  "test_rows": 86561,
+  "latent_dim": 24,
+  "sampled_rows_for_tsne": 7038,
+  "pca_explained_variance_ratio": [
+    0.4496829757292536,
+    0.19654640439750878
+  ],
+  "pca3d_explained_variance_ratio": [
+    0.4496829757292536,
+    0.19654640439750878,
+    0.09282372370107449
+  ],
+  "silhouette_multiclass": 0.44700803297683434,
+  "silhouette_binary": 0.7038179846217337
+}
